@@ -208,9 +208,7 @@
 
 /* Define the length of time, in milliseconds, between re-transmitting
    Neighbor Solicitation (NS) packets. */
-/*
-#define NX_RETRANS_TIMER						1000
-*/
+#define NX_RETRANS_TIMER                       	100
 
 /* Defined, this option disables Duplicate Address Detection (DAD) during IPv6
    address assignment. Addresses are set either by manual configuration or
@@ -296,13 +294,7 @@
 
 /* This defines specifies the number of ThreadX timer ticks in one second.
    The default value is based on ThreadX timer interrupt. */
-/*
-#ifdef TX_TIMER_TICKS_PER_SECOND
-#define NX_IP_PERIODIC_RATE         			TX_TIMER_TICKS_PER_SECOND
-#else
-#define NX_IP_PERIODIC_RATE         			100
-#endif
-*/
+#define NX_IP_PERIODIC_RATE                     500
 
 /* Defined, NX_ENABLE_IP_RAW_PACKET_FILTER allows an application to install a
    filter for incoming raw packets. This feature is disabled by default. */
@@ -359,9 +351,7 @@
 */
 
 /* This define IP fast timer rate. The default value is 10. */
-/*
-#define NX_IP_FAST_TIMER_RATE		 			10
-*/
+#define NX_IP_FAST_TIMER_RATE         			100
 
 /* Define the amount of time to sleep in nx_ip_(interface_)status_check.
    The default value is 1. */
