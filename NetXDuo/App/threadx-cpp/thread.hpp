@@ -36,20 +36,12 @@ private:
     UINT value_;
 };
 
-// struct thread_config {
-//     thread_config(char *name) : name_(name) { };
-
-//     thread_config& set_name(char *name) { name_ = name; return *this; }
-//     char *name() const { return name_; }
-
-// private:
-//     char *name_;
-// };
-
 class thread : TX_THREAD{
 
 public:
-    thread(std::function<void(ULONG)> entry, const std::string name, ULONG input, void *pstack, ULONG stack_size, priority prio) :
+    using id = std::uintptr_t;
+
+    thread(const std::string &name, std::function<void(ULONG)> entry, ULONG input, void *pstack, ULONG stack_size, priority prio) :
         name_(name),
         entry_(entry),
         input_(input),
@@ -82,15 +74,11 @@ public:
     }
 
     // void join() {
-    //     tx_thread_wait_abort(this);
-    // }
-
-    // void detach() {
-    //     tx_thread_terminate(this);
+    //
     // }
 
     // bool joinable() {
-    //     return (tx_thread_state == TX_READY);
+    //
     // }
 
     void suspend() {
@@ -101,8 +89,9 @@ public:
         tx_thread_resume(this);
     }
 
-    // ULONG get_id() {
-    // }
+    id get_id() {
+        return reinterpret_cast<id>(this);
+    }
 
 private:
     static void raw_callback(ULONG thread_ptr){
@@ -123,7 +112,7 @@ template<size_t STACK_SIZE>
 class static_thread : public thread {
 public:
     static_thread(const std::string &name, std::function<void(ULONG)> entry, ULONG input = 0, priority prio = priority(10)) :
-        thread(entry, name, input, stack_, STACK_SIZE, prio)
+        thread(name, entry, input, stack_, STACK_SIZE, prio)
     { }
 
     ~static_thread() = default;
@@ -133,8 +122,8 @@ private:
 };
 
 namespace this_thread {
-    thread* get_id() {
-        return reinterpret_cast<thread*>(tx_thread_identify());
+    thread::id get_id() {
+        return reinterpret_cast<thread::id>(tx_thread_identify());
     }
 
     void sleep_for(ULONG ms) {

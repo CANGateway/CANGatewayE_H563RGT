@@ -1,9 +1,12 @@
 #pragma once
 
 #include "main.h"
-#include "app_netxduo.h"
+// #include "app_netxduo.h"
+#include "tx_api.h"
+#include "nx_api.h"
 #include <cassert>
 #include <functional>
+#include <optional>
 #include <unordered_map>
 
 extern NX_PACKET_POOL NxAppPool;
@@ -22,6 +25,21 @@ public:
         if (ret != NX_SUCCESS)
         {
             Error_Handler();
+        }
+    }
+
+    ~tcp_socket()
+    {
+        UINT ret;
+        ret = nx_tcp_socket_delete(&socket_);
+        if (ret != NX_SUCCESS)
+        {
+            Error_Handler();
+        }
+
+        if(listen_callbacks.find(&socket_) != listen_callbacks.end())
+        {
+            listen_callbacks.erase(&socket_);
         }
     }
 
@@ -61,10 +79,6 @@ public:
     {
         UINT ret;
         ret = nx_tcp_socket_disconnect(&socket_, NX_NO_WAIT);
-        // if (ret != NX_SUCCESS)
-        // {
-        //     Error_Handler();
-        // }
         ret = nx_tcp_server_socket_unaccept(&socket_);
         if (ret != NX_SUCCESS)
         {
@@ -116,22 +130,34 @@ public:
         return std::string((char *)rx_buffer_, bytes_read);
     }
 
+    void on_listen(std::function<void(UINT)> listen_callback)
+    {
+        listen_callback_ = listen_callback;
+        listen_callbacks[&socket_] = this;
+    }
+
 private:
     static VOID tcp_listen_callback(NX_TCP_SOCKET *socket_ptr, UINT port)
     {
-        printf("tcp_listen_callback port: %d\n", port);
-        // listen_callbacks
+        if(listen_callbacks.find(socket_ptr) != listen_callbacks.end())
+        {
+            if(auto &listen_callback = listen_callbacks[socket_ptr]->listen_callback_; listen_callback.has_value())
+            {
+                listen_callback.value()(port);
+            }
+        }
     }
 
 private:
     NX_IP* interface_;
     NX_TCP_SOCKET socket_;
-    bool is_listened_;
+    bool is_listened_ = false;
+    std::optional<std::function<void(UINT)>> listen_callback_;
 
     uint8_t tx_buffer_[TX_BUFFER_SIZE];
     uint8_t rx_buffer_[RX_BUFFER_SIZE];
 
-    static inline std::unordered_map<NX_TCP_SOCKET*, tcp_socket*> listen_callbacks;
+    static inline std::unordered_map<NX_TCP_SOCKET*, tcp_socket<TX_BUFFER_SIZE, RX_BUFFER_SIZE>*> listen_callbacks;
 };
 
 }
