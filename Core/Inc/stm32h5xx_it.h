@@ -55,7 +55,6 @@ void DebugMon_Handler(void);
 void FDCAN1_IT0_IRQHandler(void);
 void TIM6_IRQHandler(void);
 void ETH_IRQHandler(void);
-void FDCAN2_IT0_IRQHandler(void);
 /* USER CODE BEGIN EFP */
 
 /* USER CODE END EFP */

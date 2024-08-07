@@ -46,7 +46,7 @@ extern "C" {
 
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
-
+#define STMBED_MANUAL_TIM_CB
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/
