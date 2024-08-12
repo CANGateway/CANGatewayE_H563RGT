@@ -14,6 +14,8 @@ extern NX_PACKET_POOL NxAppPool;
 
 namespace netxduo {
 
+#define ERROR_TS(format, ...)  printf(format, ##__VA_ARGS__)
+
 template <size_t TX_BUFFER_SIZE, size_t RX_BUFFER_SIZE> class tcp_socket {
 public:
     tcp_socket(NX_IP *interface, size_t window_size = 512) : interface_(interface) {
@@ -37,6 +39,7 @@ public:
         }
     }
 
+    // for server
     void listen(uint16_t port, UINT max_clients) {
         UINT ret;
         ret = nx_tcp_server_socket_listen(interface_, port, &socket_, max_clients, tcp_listen_callback);
@@ -46,6 +49,7 @@ public:
         is_listened_ = true;
     }
 
+    // for server
     void relisten(uint16_t port) {
         assert(is_listened_);
         UINT ret;
@@ -55,10 +59,31 @@ public:
         }
     }
 
+    // for server
     void accept() {
         UINT ret;
         ret = nx_tcp_server_socket_accept(&socket_, TX_WAIT_FOREVER);
         if (ret != NX_SUCCESS) {
+            Error_Handler();
+        }
+    }
+
+    // for client
+    void bind(uint16_t port) {
+        UINT ret;
+        ret = nx_tcp_client_socket_bind(&socket_, port, TX_WAIT_FOREVER);
+        if (ret != NX_SUCCESS) {
+        	ERROR_TS("bind: %x\n", ret);
+            Error_Handler();
+        }
+    }
+
+    // for clients
+    void connect(uint32_t ip_address, uint16_t port) {
+        UINT ret;
+        ret = nx_tcp_client_socket_connect(&socket_, ip_address, port, TX_WAIT_FOREVER);
+        if (ret != NX_SUCCESS) {
+        	ERROR_TS("connect: %x\n", ret);
             Error_Handler();
         }
     }
@@ -82,12 +107,30 @@ public:
 
         str.copy((char *)tx_buffer_, len);
 
+        // ret = nx_packet_allocate(&NxAppPool, &data_packet, NX_TCP_PACKET, TX_WAIT_FOREVER);
+        // if (ret != NX_SUCCESS) {
+        //     return;
+        // }
+
+        // nx_packet_data_append(data_packet, tx_buffer_, len, &NxAppPool, TX_WAIT_FOREVER);
+        // ret = nx_tcp_socket_send(&socket_, data_packet, TX_WAIT_FOREVER);
+        // if (ret != NX_SUCCESS) {
+        //     nx_packet_release(data_packet);
+        //     return;
+        // }
+        send((uint8_t *)tx_buffer_, len);
+    }
+
+    void send(uint8_t *data, const size_t len) {
+        UINT ret;
+        NX_PACKET *data_packet;
+
         ret = nx_packet_allocate(&NxAppPool, &data_packet, NX_TCP_PACKET, TX_WAIT_FOREVER);
         if (ret != NX_SUCCESS) {
             return;
         }
 
-        nx_packet_data_append(data_packet, tx_buffer_, len, &NxAppPool, TX_WAIT_FOREVER);
+        nx_packet_data_append(data_packet, data, len, &NxAppPool, TX_WAIT_FOREVER);
         ret = nx_tcp_socket_send(&socket_, data_packet, TX_WAIT_FOREVER);
         if (ret != NX_SUCCESS) {
             nx_packet_release(data_packet);
@@ -108,6 +151,23 @@ public:
         nx_packet_data_retrieve(data_packet, rx_buffer_, &bytes_read);
         nx_packet_release(data_packet);
         return std::string((char *)rx_buffer_, bytes_read);
+    }
+
+    bool receive(uint8_t *data, size_t &len) {
+        UINT ret;
+        ULONG bytes_read;
+        NX_PACKET *data_packet;
+
+        ret = nx_tcp_socket_receive(&socket_, &data_packet, NX_WAIT_FOREVER);
+        if (ret != NX_SUCCESS) {
+            return false;
+        }
+
+        nx_packet_data_retrieve(data_packet, data, &bytes_read);
+        nx_packet_release(data_packet);
+        len = bytes_read;
+
+        return true;
     }
 
     void on_listen(std::function<void(UINT)> listen_callback) {

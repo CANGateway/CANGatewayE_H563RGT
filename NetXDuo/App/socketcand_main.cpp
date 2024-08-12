@@ -45,13 +45,61 @@
 //         PRINT_IP_ADDRESS(IpAddress);
 //     }
 
-//     std::array<GatewayChannel, 1> channels = {
-//         GatewayChannel(&NetXDuoEthIpInstance, 6000, can[0]),
-//         // GatewayChannel(&NetXDuoEthIpInstance, 6001, can[1]),
-//     };
+//     using TCPSocketType = netxduo::tcp_socket<256, 256>;
+//     std::unique_ptr<TCPSocketType> tcp_socket_;
 
-//     channels[0].start();
-//     // channels[1].start();
+//     const uint32_t server_ip_address = IP_ADDRESS(192, 168, 0, 1);
+//     const uint16_t server_port = 6000;
+//     const uint16_t port = 6000;
+//     std::unique_ptr<thread> test_thread = std::make_unique<static_thread<1024>>("Test Thread", [&](ULONG) {
+//         printf("test cannalloni thread\n");
+
+//         tcp_socket_ = std::make_unique<TCPSocketType>(&NetXDuoEthIpInstance);
+//         // tcp_socket_->listen(port_, MAX_TCP_CLIENTS);
+//         // printf("TCP Server listening on PORT %d ..\n", port_);
+
+//         tcp_socket_->bind(port);
+
+//         while (1) {
+
+//             // printf("wait accept\n");
+//             // tcp_socket_->accept();
+//             printf("wait connect\n");
+//             tcp_socket_->connect(server_ip_address, server_port);
+
+//             //            std::vector<uint8_t> send_buf;
+//             //            std::vector<stmbed::CANMessage> msgs = {
+//             //                stmbed::CANMessage(0x123, {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07}),
+//             //            };
+//             //            send_buf.resize(32);
+
+//             std::string start_str = "CANNELLONIv1";
+//             tcp_socket_->send_str(start_str);
+
+//             printf("tp1\n");
+//             this_thread::sleep_for(20000);
+//             while (tcp_socket_->is_connected()) {
+//                 std::vector<uint8_t> send_buf;
+//                 std::vector<stmbed::CANMessage> msgs = {
+//                     stmbed::CANMessage(0x123, {0xAA, 0xBB, 0xCC, 0xDD, 0x11, 0x22, 0x33, 0x44}),
+//                 };
+//                 send_buf.resize(32);
+//                 // printf("tp2\n");
+//                 size_t packet_size = cannelloni_build_packet_header(send_buf.data(), msgs);
+//                 printf("send packet_size: %d\n", packet_size);
+//                 tcp_socket_->send(send_buf.data(), packet_size);
+//                 // printf("tp3\n");
+
+//                 this_thread::sleep_for(50000);
+//             }
+
+//             printf("disconnect\n");
+//             tcp_socket_->disconnect();
+//             printf("disconnect tp1\n");
+//             tcp_socket_->relisten(port_);
+//             printf("disconnect tp2\n");
+//         }
+//     });
 
 //     std::unique_ptr<thread> link_thread = std::make_unique<static_thread<1024>>("Link Thread",
 //     App_Link_Thread_Entry);

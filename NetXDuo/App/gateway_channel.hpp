@@ -46,14 +46,23 @@ private:
             socketcan_tx_msg_queue.push(str); // ISRから呼び出すため直接push
         });
 
+        const uint32_t server_ip_address = IP_ADDRESS(192, 168, 1, 30);
+        const uint16_t server_port = 29536;
+
         // create socket
         tcp_socket_ = std::make_unique<TCPSocketType>(interface_);
-        tcp_socket_->listen(port_, MAX_TCP_CLIENTS);
-        printf("TCP Server listening on PORT %d ..\n", port_);
+        // tcp_socket_->listen(port_, MAX_TCP_CLIENTS);
+        // printf("TCP Server listening on PORT %d ..\n", port_);
+
+        printf("bind\n");
+        tcp_socket_->bind(port_);
 
         while (1) {
-            printf("wait accept\n");
-            tcp_socket_->accept();
+            // printf("wait accept\n");
+            // tcp_socket_->accept();
+
+            printf("wait connect\n");
+            tcp_socket_->connect(server_ip_address, server_port);
 
             // スレッドの作成
             receive_thread_ = std::make_unique<static_thread<THREAD_STACK_SIZE>>(
@@ -89,7 +98,7 @@ private:
             str_cmd_list = parse_cmd(rx_str);
 
             for (auto &cmd : str_cmd_list) {
-                // printf("stm32 listen: %s\n", cmd.c_str());
+                printf("stm32 listen: %s\n", cmd.c_str());
 
                 // 複数パケットを分割
                 if (cmd.starts_with("< open ")) {
@@ -140,6 +149,7 @@ private:
                 socketcan_tx_msg_queue.pop();
                 tx_socketcan_msg_queue_mutex_.unlock();
 
+                printf("send: %s\n", str.c_str());
                 tcp_socket_->send_str(str);
             } else {
                 this_thread::sleep_for(10);
@@ -156,6 +166,7 @@ private:
         // ソケットの切断とリセット
         tcp_socket_->disconnect();
         tcp_socket_->relisten(port_);
+        printf("cleanup_and_relisten - end\n");
     }
 
     void add_tx_queue(const std::string &str) {
