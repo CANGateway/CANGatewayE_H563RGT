@@ -7,6 +7,8 @@
 // #include <stdbool.h>
 // #include <string.h>
 
+// #include "cannelloni.hpp"
+
 // #include "unit_test.hpp"
 
 // extern UART_HandleTypeDef huart3;
@@ -48,24 +50,24 @@
 //     using TCPSocketType = netxduo::tcp_socket<256, 256>;
 //     std::unique_ptr<TCPSocketType> tcp_socket_;
 
-//     const uint32_t server_ip_address = IP_ADDRESS(192, 168, 0, 1);
-//     const uint16_t server_port = 6000;
+//     // const uint32_t server_ip_address = IP_ADDRESS(192, 168, 1, 20);
+//     // const uint16_t server_port = 6000;
 //     const uint16_t port = 6000;
 //     std::unique_ptr<thread> test_thread = std::make_unique<static_thread<1024>>("Test Thread", [&](ULONG) {
 //         printf("test cannalloni thread\n");
 
 //         tcp_socket_ = std::make_unique<TCPSocketType>(&NetXDuoEthIpInstance);
-//         // tcp_socket_->listen(port_, MAX_TCP_CLIENTS);
-//         // printf("TCP Server listening on PORT %d ..\n", port_);
+//         tcp_socket_->listen(port, MAX_TCP_CLIENTS);
+//         printf("TCP Server listening on PORT %d ..\n", port);
 
-//         tcp_socket_->bind(port);
+//         //        tcp_socket_->bind(port);
 
 //         while (1) {
 
-//             // printf("wait accept\n");
-//             // tcp_socket_->accept();
-//             printf("wait connect\n");
-//             tcp_socket_->connect(server_ip_address, server_port);
+//             printf("wait accept\n");
+//             tcp_socket_->accept();
+//             //            printf("wait connect\n");
+//             //            tcp_socket_->connect(server_ip_address, server_port);
 
 //             //            std::vector<uint8_t> send_buf;
 //             //            std::vector<stmbed::CANMessage> msgs = {
@@ -73,30 +75,81 @@
 //             //            };
 //             //            send_buf.resize(32);
 
-//             std::string start_str = "CANNELLONIv1";
+//             std::string start_str = cannelloni::tcp_protocol::TAG;
 //             tcp_socket_->send_str(start_str);
 
 //             printf("tp1\n");
 //             this_thread::sleep_for(20000);
+//             std::vector<uint8_t> recv_buf;
+//             recv_buf.resize(256);
+//             bool is_initiated = false;
 //             while (tcp_socket_->is_connected()) {
-//                 std::vector<uint8_t> send_buf;
-//                 std::vector<stmbed::CANMessage> msgs = {
-//                     stmbed::CANMessage(0x123, {0xAA, 0xBB, 0xCC, 0xDD, 0x11, 0x22, 0x33, 0x44}),
-//                 };
-//                 send_buf.resize(32);
-//                 // printf("tp2\n");
-//                 size_t packet_size = cannelloni_build_packet_header(send_buf.data(), msgs);
-//                 printf("send packet_size: %d\n", packet_size);
-//                 tcp_socket_->send(send_buf.data(), packet_size);
-//                 // printf("tp3\n");
+//                 ///// send test
+//                 // std::vector<uint8_t> send_buf;
+//                 // std::vector<stmbed::CANMessage> msgs = {
+//                 //     stmbed::CANMessage(0x123, {0xAA, 0xBB, 0xCC, 0xDD, 0x11, 0x22, 0x33, 0x44}),
+//                 // };
+//                 // send_buf.resize(32);
+//                 // // printf("tp2\n");
+//                 // size_t packet_size = cannelloni_build_packet_header(send_buf.data(), msgs);
+//                 // printf("send packet_size: %d\n", packet_size);
+//                 // tcp_socket_->send(send_buf.data(), packet_size);
+//                 // // printf("tp3\n");
 
-//                 this_thread::sleep_for(50000);
+//                 // this_thread::sleep_for(50000);
+
+//                 ///// recv test
+//                 size_t recv_size;
+//                 // if (std::string str = tcp_socket_->receive_str(); str.size() > 0) {
+//                 //     printf("recv: \"%s\"\n", str.c_str());
+//                 //     // std::vector<stmbed::CANMessage> msgs;
+//                 //     // if (cannelloni::tcp_protocol::cannelloni_parse_packet(msgs, str.c_str(), str.size())) {
+//                 //     //     for (auto &msg : msgs) {
+//                 //     //         printf("id: %x, data: ", msg.id);
+//                 //     //         for (auto &data : msg.data) {
+//                 //     //             printf("%x ", data);
+//                 //     //         }
+//                 //     //         printf("\n");
+//                 //     //     }
+//                 //     // } else {
+//                 //     //     printf("parse fail\n");
+//                 //     // }
+//                 // }
+//                 if (tcp_socket_->receive(recv_buf.data(), recv_size)) {
+
+//                     // printf("recv: (%d) ", recv_size);
+//                     // for (int i = 0; i < recv_size; i++) {
+//                     //     printf("%x ", recv_buf[i]);
+//                     // }
+//                     // printf("\n");
+//                     if (not is_initiated) {
+//                         std::string str = std::string(recv_buf.begin(), recv_buf.begin() + recv_size);
+//                         if (str == cannelloni::tcp_protocol::TAG) {
+//                             printf("initiated\n");
+//                             is_initiated = true;
+//                         }
+//                     } else {
+//                         std::vector<stmbed::CANMessage> msgs;
+//                         if (cannelloni::tcp_protocol::cannelloni_parse_packet(msgs, recv_buf.data(), recv_size)) {
+//                             for (auto &msg : msgs) {
+//                                 printf("id: %x, type: %s, data: ", msg.id,
+//                                        msg.format == stmbed::CANFormat::CANStandard ? "Standard" : "Extended");
+//                                 for (auto &data : msg.data) {
+//                                     printf("%x ", data);
+//                                 }
+//                                 printf("\n");
+//                             }
+//                         } else {
+//                             printf("parse fail\n");
+//                         }
+//                     }
+//                 }
 //             }
 
 //             printf("disconnect\n");
 //             tcp_socket_->disconnect();
 //             printf("disconnect tp1\n");
-//             tcp_socket_->relisten(port_);
+//             tcp_socket_->relisten(port);
 //             printf("disconnect tp2\n");
 //         }
 //     });

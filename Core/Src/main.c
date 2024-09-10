@@ -23,6 +23,7 @@
 #include "fdcan.h"
 #include "icache.h"
 #include "memorymap.h"
+#include "spi.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -99,6 +100,7 @@ int main(void)
   MX_FDCAN2_Init();
   MX_ICACHE_Init();
   MX_USART3_UART_Init();
+  MX_SPI2_Init();
   /* USER CODE BEGIN 2 */
   setbuf(stdout, NULL);
   /* USER CODE END 2 */
