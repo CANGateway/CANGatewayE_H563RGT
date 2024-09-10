@@ -17,13 +17,15 @@ class CannelloniChannel {
 public:
     using TCPSocketType = netxduo::tcp_socket<256, 256>;
 
-    CannelloniChannel(NX_IP *interface, uint16_t port, stmbed::CAN &hcan)
-        : interface_(interface), port_(port), can_(hcan) {}
+    CannelloniChannel(NX_IP *interface, uint16_t port, stmbed::CAN &hcan, int channel_id)
+        : interface_(interface), port_(port), can_(hcan), channel_id_(channel_id) {}
 
     void start() {
         main_thread_ = std::make_unique<threadx::static_thread<THREAD_STACK_SIZE>>(
             "Main Thread", std::bind(&CannelloniChannel::channel_main, this, std::placeholders::_1));
     }
+
+    int channel_id() const { return channel_id_; }
 
 private:
     void channel_main(ULONG thread_input) {
@@ -34,7 +36,7 @@ private:
         can_.attach([&](const stmbed::CANMessage &msg) {
             if (is_initiated) {
                 // printf("can recv: id: %d, size: %d\n", msg.id, msg.size);
-                socketcan_tx_msg_queue_.push(msg); // ISRから呼び出すためlockせず直接push
+                tx_msg_queue_.push(msg); // ISRから呼び出すためlockせず直接push
             } else {
                 printf("can recv but not initiated\n");
             }
@@ -108,22 +110,22 @@ private:
                         //     printf("%x ", data);
                         // }
                         // printf("\n");
-                        socketcan_rx_msg_queue_.push(msg);
+                        rx_msg_queue_.push(msg);
                     }
-                    // printf("socketcan_rx_msg_queue_.size(): %ld\n", socketcan_rx_msg_queue_.size());
+                    // printf("rx_msg_queue_.size(): %ld\n", rx_msg_queue_.size());
                 } else {
                     printf("parse fail\n");
                 }
             }
 
-            if (socketcan_rx_msg_queue_.size() > 10) {
-                printf("warn: socketcan_rx_msg_queue_.size() > 10 (%ld)\n", socketcan_rx_msg_queue_.size());
+            if (rx_msg_queue_.size() > 10) {
+                printf("warn: rx_msg_queue_.size() > 10 (%ld)\n", rx_msg_queue_.size());
             }
 
-            while (!socketcan_rx_msg_queue_.empty() && can_.writeable()) {
+            while (!rx_msg_queue_.empty() && can_.writeable()) {
                 // printf("can write port: %d\n", port_);
-                can_.write(socketcan_rx_msg_queue_.front());
-                socketcan_rx_msg_queue_.pop();
+                can_.write(rx_msg_queue_.front());
+                rx_msg_queue_.pop();
             }
 
             this_thread::sleep_for(10);
@@ -147,16 +149,16 @@ private:
         msgs.reserve(8);
         send_buf.reserve(256);
         while (1) {
-            if (!socketcan_tx_msg_queue_.empty()) {
-                tx_socketcan_msg_queue_mutex_.lock();
+            if (!tx_msg_queue_.empty()) {
+                tx_msg_queue_mutex_.lock();
 
                 // copy queue to vector
-                while (!socketcan_tx_msg_queue_.empty()) {
-                    msgs.push_back(socketcan_tx_msg_queue_.front());
-                    socketcan_tx_msg_queue_.pop();
+                while (!tx_msg_queue_.empty()) {
+                    msgs.push_back(tx_msg_queue_.front());
+                    tx_msg_queue_.pop();
                 }
 
-                tx_socketcan_msg_queue_mutex_.unlock();
+                tx_msg_queue_mutex_.unlock();
 
                 size_t packet_size = cannelloni::tcp_protocol::build_packet(send_buf.data(), msgs);
                 msgs.clear();
@@ -184,15 +186,16 @@ private:
 
     void add_tx_queue(const stmbed::CANMessage &&str) {
         if (is_initiated) {
-            tx_socketcan_msg_queue_mutex_.lock();
-            socketcan_tx_msg_queue_.push(str);
-            tx_socketcan_msg_queue_mutex_.unlock();
+            tx_msg_queue_mutex_.lock();
+            tx_msg_queue_.push(str);
+            tx_msg_queue_mutex_.unlock();
         }
     }
 
     NX_IP *interface_;
     uint16_t port_;
     stmbed::CAN can_;
+    const int channel_id_;
 
     constexpr static UINT THREAD_STACK_SIZE = 2048;
     std::unique_ptr<threadx::thread> main_thread_;
@@ -200,10 +203,10 @@ private:
     std::unique_ptr<threadx::thread> send_thread_;
     std::unique_ptr<TCPSocketType> tcp_socket_;
 
-    std::queue<stmbed::CANMessage> socketcan_tx_msg_queue_; // CANから受信したデータのキュー
-    threadx::mutex tx_socketcan_msg_queue_mutex_;
+    std::queue<stmbed::CANMessage> tx_msg_queue_; // CANから受信したデータのキュー
+    threadx::mutex tx_msg_queue_mutex_;
 
-    std::queue<stmbed::CANMessage> socketcan_rx_msg_queue_; // ホストから受信したデータのキュー
+    std::queue<stmbed::CANMessage> rx_msg_queue_; // ホストから受信したデータのキュー
 
     bool is_initiated = false;
 };

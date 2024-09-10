@@ -37,9 +37,6 @@ extern "C" VOID cangateway_main(ULONG thread_input) {
     ULONG IpAddress;
     ULONG NetMask;
 
-    for (size_t i = 0; i < 5; i++)
-        tx_thread_sleep(20000);
-
     UINT ret;
     ret = nx_ip_address_get(&NetXDuoEthIpInstance, &IpAddress, &NetMask);
     if (ret != TX_SUCCESS) {
@@ -48,9 +45,12 @@ extern "C" VOID cangateway_main(ULONG thread_input) {
         PRINT_IP_ADDRESS(IpAddress);
     }
 
+    for (size_t i = 0; i < 5; i++)
+        tx_thread_sleep(20000);
+
     std::array channels = {
-        CannelloniChannel(&NetXDuoEthIpInstance, 6000, can[0]),
-        CannelloniChannel(&NetXDuoEthIpInstance, 6001, can[1]),
+        CannelloniChannel(&NetXDuoEthIpInstance, 6000, can[0], 1),
+        CannelloniChannel(&NetXDuoEthIpInstance, 6001, can[1], 2),
     };
 
     channels[0].start();
