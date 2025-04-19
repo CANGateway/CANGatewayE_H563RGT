@@ -7,8 +7,9 @@
 #include <stdbool.h>
 #include <string.h>
 
-#include "cannelloni.hpp"
-#include "cannelloni_channel.hpp"
+//#include "cannelloni.hpp"
+//#include "cannelloni_channel.hpp"
+#include "socketcand_channel.hpp"
 
 #include "unit_test.hpp"
 
@@ -48,13 +49,22 @@ extern "C" VOID cangateway_main(ULONG thread_input) {
     for (size_t i = 0; i < 5; i++)
         tx_thread_sleep(20000);
 
+    // std::array channels = {
+    //     CannelloniChannel(&NetXDuoEthIpInstance, 6000, can[0], 1),
+    //     CannelloniChannel(&NetXDuoEthIpInstance, 6001, can[1], 2),
+    // };
+
+    // channels[0].start();
+    // channels[1].start();
+
     std::array channels = {
-        CannelloniChannel(&NetXDuoEthIpInstance, 6000, can[0], 1),
-        CannelloniChannel(&NetXDuoEthIpInstance, 6001, can[1], 2),
+    		SocketcandClientChannel(&NetXDuoEthIpInstance, "192.168.1.10", 29536, "vcan0", can[0], 1),
+//        CannelloniChannel(&NetXDuoEthIpInstance, 29536, can[0], 1),
+        // CannelloniChannel(&NetXDuoEthIpInstance, 6001, can[1], 2),
     };
 
     channels[0].start();
-    channels[1].start();
+    // channels[1].start();
 
     std::unique_ptr<thread> link_thread = std::make_unique<static_thread<1024>>("Link Thread", App_Link_Thread_Entry);
 

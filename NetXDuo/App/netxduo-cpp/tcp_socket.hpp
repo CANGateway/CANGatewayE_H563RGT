@@ -14,7 +14,7 @@ extern NX_PACKET_POOL NxAppPool;
 
 namespace netxduo {
 
-#define ERROR_TS(format, ...)  printf(format, ##__VA_ARGS__)
+#define ERROR_TS(format, ...) printf(format, ##__VA_ARGS__)
 
 template <size_t TX_BUFFER_SIZE, size_t RX_BUFFER_SIZE> class tcp_socket {
 public:
@@ -73,7 +73,7 @@ public:
         UINT ret;
         ret = nx_tcp_client_socket_bind(&socket_, port, TX_WAIT_FOREVER);
         if (ret != NX_SUCCESS) {
-        	ERROR_TS("bind: %x\n", ret);
+            ERROR_TS("bind: %x\n", ret);
             Error_Handler();
         }
     }
@@ -83,7 +83,7 @@ public:
         UINT ret;
         ret = nx_tcp_client_socket_connect(&socket_, ip_address, port, TX_WAIT_FOREVER);
         if (ret != NX_SUCCESS) {
-        	ERROR_TS("connect: %x\n", ret);
+            ERROR_TS("connect: %x\n", ret);
             Error_Handler();
         }
     }
@@ -174,6 +174,8 @@ public:
         listen_callback_ = listen_callback;
         listen_callbacks[&socket_] = this;
     }
+
+    NX_TCP_SOCKET &get_native_handle() { return socket_; }
 
 private:
     static VOID tcp_listen_callback(NX_TCP_SOCKET *socket_ptr, UINT port) {
