@@ -79,13 +79,15 @@ public:
     }
 
     // for clients
-    void connect(uint32_t ip_address, uint16_t port) {
+    bool connect(uint32_t ip_address, uint16_t port) {
         UINT ret;
         ret = nx_tcp_client_socket_connect(&socket_, ip_address, port, TX_WAIT_FOREVER);
         if (ret != NX_SUCCESS) {
-            ERROR_TS("connect: %x\n", ret);
-            Error_Handler();
+            // ERROR_TS("connect: %x\n", ret);
+            // Error_Handler();
+            return false;
         }
+        return true;
     }
 
     void disconnect() {

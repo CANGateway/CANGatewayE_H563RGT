@@ -46,8 +46,10 @@ extern "C" VOID cangateway_main(ULONG thread_input) {
         PRINT_IP_ADDRESS(IpAddress);
     }
 
-    for (size_t i = 0; i < 5; i++)
-        tx_thread_sleep(20000);
+    // for (size_t i = 0; i < 5; i++)
+    //     tx_thread_sleep(20000);
+
+    std::unique_ptr<thread> link_thread = std::make_unique<static_thread<1024>>("Link Thread", App_Link_Thread_Entry);
 
     // std::array channels = {
     //     CannelloniChannel(&NetXDuoEthIpInstance, 6000, can[0], 1),
@@ -58,15 +60,17 @@ extern "C" VOID cangateway_main(ULONG thread_input) {
     // channels[1].start();
 
     std::array channels = {
-    		SocketcandClientChannel(&NetXDuoEthIpInstance, "192.168.1.10", 29536, "vcan0", can[0], 1),
-//        CannelloniChannel(&NetXDuoEthIpInstance, 29536, can[0], 1),
+        // SocketcandClientChannel(&NetXDuoEthIpInstance, "192.168.1.10", 29536, "vcan0", can[0], 1),
+        //        CannelloniChannel(&NetXDuoEthIpInstance, 29536, can[0], 1),
         // CannelloniChannel(&NetXDuoEthIpInstance, 6001, can[1], 2),
+        GatewayChannel(&NetXDuoEthIpInstance, 6000, "vcan0", can[0]),
     };
+
+    for (size_t i = 0; i < 5; i++)
+        tx_thread_sleep(20000);
 
     channels[0].start();
     // channels[1].start();
-
-    std::unique_ptr<thread> link_thread = std::make_unique<static_thread<1024>>("Link Thread", App_Link_Thread_Entry);
 
     while (1) {
         this_thread::sleep_for(1000);
@@ -81,12 +85,20 @@ VOID App_Link_Thread_Entry(ULONG thread_input) {
     printf("App_Link_Thread_Entry\n");
 
     while (1) {
-        /* Get Physical Link status. */
+        /* Send request to check if the Ethernet cable is connected. */
         status = nx_ip_interface_status_check(&NetXDuoEthIpInstance, 0, NX_IP_LINK_ENABLED, &actual_status, 10);
 
         if (status == NX_SUCCESS) {
             if (linkdown == 1) {
                 linkdown = 0;
+
+                /* The network cable is connected. */
+                printf("The network cable is connected.\n");
+
+                /* Send request to enable PHY Link. */
+                nx_ip_driver_direct_command(&NetXDuoEthIpInstance, NX_LINK_ENABLE, &actual_status);
+
+                /* Send request to check if an address is resolved. */
                 status =
                     nx_ip_interface_status_check(&NetXDuoEthIpInstance, 0, NX_IP_ADDRESS_RESOLVED, &actual_status, 10);
                 if (status == NX_SUCCESS) {
@@ -109,6 +121,7 @@ VOID App_Link_Thread_Entry(ULONG thread_input) {
                 linkdown = 1;
                 /* The network cable is not connected. */
                 printf("The network cable is not connected.\n");
+                nx_ip_driver_direct_command(&NetXDuoEthIpInstance, NX_LINK_DISABLE, &actual_status);
             }
         }
 

@@ -24,8 +24,15 @@ class GatewayChannel {
 public:
     using TCPSocketType = netxduo::tcp_socket<256, 256>;
 
-    GatewayChannel(NX_IP *interface, uint16_t port, stmbed::CAN &hcan)
-        : interface_(interface), port_(port), can_(hcan) {}
+    enum class GatewayState {
+        IDLE,
+        CONNECTING,
+        CONNECTED,
+        DISCONNECTED,
+    };
+
+    GatewayChannel(NX_IP *interface, uint16_t port, std::string can_interface_name, stmbed::CAN &hcan)
+        : interface_(interface), port_(port), can_interface_name_(can_interface_name), can_(hcan) {}
 
     void start() {
         main_thread_ = std::make_unique<threadx::static_thread<THREAD_STACK_SIZE>>(
@@ -39,46 +46,104 @@ private:
 
         printf("can attach\n");
         can_.attach([&](const stmbed::CANMessage &msg) {
+            if (state_ != GatewayState::CONNECTED) {
+                return;
+            }
             // printf("can recv: id: %d, size: %d\n", msg.id, msg.size);
             std::string str = to_socketcan_frame_str(msg);
             // printf("to_socketcan_frame_str: \"%s\"\n", str.c_str());
             // add_tx_queue(str);
-            socketcan_tx_msg_queue.push(str); // ISRから呼び出すため直接push
+            send_str_cmd_queue_.push(str); // ISRから呼び出すため直接push
         });
 
-        const uint32_t server_ip_address = IP_ADDRESS(192, 168, 1, 30);
+        const uint32_t server_ip_address = IP_ADDRESS(192, 168, 1, 10);
         const uint16_t server_port = 29536;
 
         // create socket
         tcp_socket_ = std::make_unique<TCPSocketType>(interface_);
-        // tcp_socket_->listen(port_, MAX_TCP_CLIENTS);
-        // printf("TCP Server listening on PORT %d ..\n", port_);
 
         printf("bind\n");
         tcp_socket_->bind(port_);
 
         while (1) {
-            // printf("wait accept\n");
-            // tcp_socket_->accept();
+            // printf("wait connect\n");
+            if (tcp_socket_->connect(server_ip_address, server_port)) {
+                // 接続に成功したらスレッドの作成
+                receive_thread_ = std::make_unique<static_thread<THREAD_STACK_SIZE>>(
+                    "Receive Thread", std::bind(&GatewayChannel::receive_thread_entry, this, std::placeholders::_1));
+                send_thread_ = std::make_unique<static_thread<THREAD_STACK_SIZE>>(
+                    "Send Thread", std::bind(&GatewayChannel::send_thread_entry, this, std::placeholders::_1));
+            }
 
-            printf("wait connect\n");
-            tcp_socket_->connect(server_ip_address, server_port);
-
-            // スレッドの作成
-            receive_thread_ = std::make_unique<static_thread<THREAD_STACK_SIZE>>(
-                "Receive Thread", std::bind(&GatewayChannel::receive_thread_entry, this, std::placeholders::_1));
-            send_thread_ = std::make_unique<static_thread<THREAD_STACK_SIZE>>(
-                "Send Thread", std::bind(&GatewayChannel::send_thread_entry, this, std::placeholders::_1));
-
-            printf("wait for disconnect\n");
+            // printf("wait for disconnect\n");
             // クライアントの切断を待つ
             while (1) {
+                // 接続が切断された場合
                 if (!tcp_socket_->is_connected()) {
-                    printf("Connection lost, resetting socket\n");
+                    if (state_ != GatewayState::DISCONNECTED) {
+                        printf("Connection lost, resetting socket\n");
+                    }
+                    state_ = GatewayState::DISCONNECTED;
                     break;
                 }
 
-                this_thread::sleep_for(100); // 少し待機
+                // メイン処理
+                while (!recv_str_cmd_queue_.empty()) {
+                    recv_str_cmd_mute_.lock();
+                    auto cmd = recv_str_cmd_queue_.front();
+                    recv_str_cmd_queue_.pop();
+                    recv_str_cmd_mute_.unlock();
+
+                    printf("stm32 listen: %s\n", cmd.c_str());
+
+                    // 複数パケットを分割
+                    if (cmd.starts_with("< hi >")) {
+                        state_ = GatewayState::CONNECTING;
+                        add_tx_queue("< open " + can_interface_name_ + " >");
+                    }
+                    if (cmd == "< ok >") {
+                        state_ = GatewayState::CONNECTED;
+                    }
+                    if (cmd == "< echo >") {
+                        add_tx_queue("< echo >");
+                    }
+                    if (state_ == GatewayState::CONNECTED) {
+                        if (cmd == "< rawmode >") {
+                            // always rawmode
+                            // nothing to do
+                        }
+                        if (cmd == "< bcmmode >") {
+                            // Todo: implement BCM mode
+                            add_tx_queue("< error not supported bcm mode >");
+                        }
+                        if (cmd.starts_with("< send ")) {
+                            // e.g. "< send 1FFFFFFF 5 a 0 0 1 cf >"
+                            //       < send [id] [dlc] [data] >
+
+                            // printf("to_can_message\n");
+
+                            stmbed::CANMessage msg = to_can_message(cmd);
+
+                            // printf("msg.format: %d\n", msg.format);
+                            // printf("msg.id: %d\n", msg.id);
+                            // printf("msg.size: %d\n", msg.size);
+                            // for(size_t i = 0; i < msg.size; i++) {
+                            //     printf("msg.data[%d]: %d\n", i, msg.data[i]);
+                            // }
+
+                            // printf("can->tx_fifo_size(): %d\n", can_->tx_fifo_size());
+
+                            // printf("can write\n");
+                            can_.write(msg);
+
+                            // printf("can->write\n");
+                        } else if (cmd != "") {
+                            // add_tx_queue("< ok >");
+                        }
+                    }
+                }
+
+                this_thread::sleep_for(10); // 少し待機
             }
 
             // cleanup_and_relisten
@@ -90,48 +155,20 @@ private:
         using namespace threadx;
         std::string rx_str;
         std::vector<std::string> str_cmd_list;
-
         printf("start receive thread\n");
         while (1) {
             rx_str = tcp_socket_->receive_str();
 
             str_cmd_list = parse_cmd(rx_str);
 
+            // add str_cmd_list to
+            recv_str_cmd_mute_.lock();
             for (auto &cmd : str_cmd_list) {
-                printf("stm32 listen: %s\n", cmd.c_str());
-
-                // 複数パケットを分割
-                if (cmd.starts_with("< open ")) {
-                    add_tx_queue("< ok >");
-                }
-                if (cmd == "< rawmode >") {
-                    add_tx_queue("< ok >");
-                }
-                if (cmd.starts_with("< send ")) {
-                    // e.g. "< send 1FFFFFFF 5 a 0 0 1 cf >"
-                    //       < send [id] [dlc] [data] >
-
-                    // printf("to_can_message\n");
-
-                    stmbed::CANMessage msg = to_can_message(cmd);
-
-                    // printf("msg.format: %d\n", msg.format);
-                    // printf("msg.id: %d\n", msg.id);
-                    // printf("msg.size: %d\n", msg.size);
-                    // for(size_t i = 0; i < msg.size; i++) {
-                    //     printf("msg.data[%d]: %d\n", i, msg.data[i]);
-                    // }
-
-                    // printf("can->tx_fifo_size(): %d\n", can_->tx_fifo_size());
-
-                    // printf("can write\n");
-                    can_.write(msg);
-
-                    // printf("can->write\n");
-                } else if (cmd != "") {
-                    add_tx_queue("< ok >");
-                }
+                recv_str_cmd_queue_.push(cmd);
+                // printf("recv_str_cmd_queue_.push: %s\n", cmd.c_str());
             }
+            recv_str_cmd_mute_.unlock();
+
             this_thread::sleep_for(10);
         }
     }
@@ -141,13 +178,12 @@ private:
         std::string str;
 
         printf("start send thread\n");
-        add_tx_queue("< hi >");
         while (1) {
-            if (!socketcan_tx_msg_queue.empty()) {
-                tx_socketcan_msg_queue_mutex_.lock();
-                str = socketcan_tx_msg_queue.front();
-                socketcan_tx_msg_queue.pop();
-                tx_socketcan_msg_queue_mutex_.unlock();
+            if (!send_str_cmd_queue_.empty()) {
+                send_str_cmd_mute_.lock();
+                str = send_str_cmd_queue_.front();
+                send_str_cmd_queue_.pop();
+                send_str_cmd_mute_.unlock();
 
                 printf("send: %s\n", str.c_str());
                 tcp_socket_->send_str(str);
@@ -158,21 +194,21 @@ private:
     }
 
     void cleanup_and_relisten(void) {
-        printf("cleanup_and_relisten\n");
-        // スレッドの削除
+        // printf("cleanup_and_relisten\n");
+        //  スレッドの削除
         receive_thread_.reset();
         send_thread_.reset();
 
         // ソケットの切断とリセット
         tcp_socket_->disconnect();
-        tcp_socket_->relisten(port_);
-        printf("cleanup_and_relisten - end\n");
+        tcp_socket_->bind(port_);
+        // printf("cleanup_and_relisten - end\n");
     }
 
     void add_tx_queue(const std::string &str) {
-        tx_socketcan_msg_queue_mutex_.lock();
-        socketcan_tx_msg_queue.push(str);
-        tx_socketcan_msg_queue_mutex_.unlock();
+        send_str_cmd_mute_.lock();
+        send_str_cmd_queue_.push(str);
+        send_str_cmd_mute_.unlock();
     }
 
     std::vector<std::string> parse_cmd(const std::string &str) {
@@ -314,7 +350,10 @@ private:
 
     NX_IP *interface_;
     uint16_t port_;
+    std::string can_interface_name_;
     stmbed::CAN can_;
+
+    GatewayState state_ = GatewayState::IDLE;
 
     constexpr static UINT THREAD_STACK_SIZE = 2048;
     std::unique_ptr<threadx::thread> main_thread_;
@@ -322,6 +361,8 @@ private:
     std::unique_ptr<threadx::thread> send_thread_;
     std::unique_ptr<TCPSocketType> tcp_socket_;
 
-    std::queue<std::string> socketcan_tx_msg_queue;
-    threadx::mutex tx_socketcan_msg_queue_mutex_;
+    std::queue<std::string> recv_str_cmd_queue_;
+    threadx::mutex recv_str_cmd_mute_;
+    std::queue<std::string> send_str_cmd_queue_;
+    threadx::mutex send_str_cmd_mute_;
 };
