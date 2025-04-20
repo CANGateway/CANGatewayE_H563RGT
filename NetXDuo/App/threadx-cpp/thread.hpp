@@ -5,6 +5,8 @@
 #include <functional>
 #include <string>
 
+#define MS_TO_TICKS(ms) (((ms)*TX_TIMER_TICKS_PER_SECOND) / 1000)
+
 namespace threadx {
 
 struct priority {
@@ -90,7 +92,7 @@ private:
 namespace this_thread {
 thread::id get_id() { return reinterpret_cast<thread::id>(tx_thread_identify()); }
 
-void sleep_for(ULONG ms) { tx_thread_sleep(ms); }
+void sleep_for(ULONG ms) { tx_thread_sleep(MS_TO_TICKS(ms)); }
 } // namespace this_thread
 
 } // namespace threadx

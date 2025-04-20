@@ -6,6 +6,7 @@
 #include <queue>
 #include <stdbool.h>
 #include <string.h>
+#include <vector>
 
 //#include "cannelloni.hpp"
 //#include "cannelloni_channel.hpp"
@@ -51,6 +52,9 @@ extern "C" VOID cangateway_main(ULONG thread_input) {
 
     std::unique_ptr<thread> link_thread = std::make_unique<static_thread<1024>>("Link Thread", App_Link_Thread_Entry);
 
+    //     for (size_t i = 0; i < 5; i++)
+    //         tx_thread_sleep(1000);
+
     // std::array channels = {
     //     CannelloniChannel(&NetXDuoEthIpInstance, 6000, can[0], 1),
     //     CannelloniChannel(&NetXDuoEthIpInstance, 6001, can[1], 2),
@@ -58,20 +62,27 @@ extern "C" VOID cangateway_main(ULONG thread_input) {
 
     // channels[0].start();
     // channels[1].start();
+    //    printf("tp1\n");
+    //    std::array channels = {
+    //        // SocketcandClientChannel(&NetXDuoEthIpInstance, "192.168.1.10", 29536, "vcan0", can[0], 1),
+    //        //        CannelloniChannel(&NetXDuoEthIpInstance, 29536, can[0], 1),
+    //        // CannelloniChannel(&NetXDuoEthIpInstance, 6001, can[1], 2),
+    //    	GatewayChannel(&NetXDuoEthIpInstance, 6000, "vcan0", can[0])
+    //     };
+    //
+    //    channels.push_back(GatewayChannel(&NetXDuoEthIpInstance, 6000, "vcan0", can[0]));
 
-    std::array channels = {
-        // SocketcandClientChannel(&NetXDuoEthIpInstance, "192.168.1.10", 29536, "vcan0", can[0], 1),
-        //        CannelloniChannel(&NetXDuoEthIpInstance, 29536, can[0], 1),
-        // CannelloniChannel(&NetXDuoEthIpInstance, 6001, can[1], 2),
-        GatewayChannel(&NetXDuoEthIpInstance, 6000, "vcan0", can[0]),
-    };
+    const uint32_t server_ip_address = IP_ADDRESS(192, 168, 1, 10);
+    const uint16_t server_port = 29536;
 
-    for (size_t i = 0; i < 5; i++)
-        tx_thread_sleep(20000);
+    auto channel0 =
+        std::make_shared<GatewayChannel>(&NetXDuoEthIpInstance, server_ip_address, server_port, 6000, "vcan0", can[0]);
+    auto channel1 = std::make_shared<GatewayChannel>(&NetXDuoEthIpInstance, server_ip_address, server_port, 6001, "vcan1", can[1]);
 
-    channels[0].start();
-    // channels[1].start();
+    this_thread::sleep_for(5000);
 
+    channel0->start();
+    channel1->start();
     while (1) {
         this_thread::sleep_for(1000);
     }
@@ -82,7 +93,7 @@ VOID App_Link_Thread_Entry(ULONG thread_input) {
     UINT linkdown = 0, status;
     stmbed::DigitalOut led1(LED1_GPIO_Port, LED1_Pin);
 
-    printf("App_Link_Thread_Entry\n");
+    // printf("App_Link_Thread_Entry\n");
 
     while (1) {
         /* Send request to check if the Ethernet cable is connected. */
