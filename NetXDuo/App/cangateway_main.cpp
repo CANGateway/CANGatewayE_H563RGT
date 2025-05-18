@@ -8,8 +8,6 @@
 #include <string.h>
 #include <vector>
 
-//#include "cannelloni.hpp"
-//#include "cannelloni_channel.hpp"
 #include "socketcand_channel.hpp"
 
 #include "unit_test.hpp"
@@ -27,14 +25,34 @@ extern "C" VOID cangateway_main(ULONG thread_input) {
     using namespace threadx;
     printf("\nmyMain start\n");
 
+    // unit_test::led_test();
     // unit_test::can_test();
     // unit_test::thread_cpp_test();
     // unit_test::thread_can_test();
+    // unit_test::html_server_test();
 
     std::array<stmbed::CAN, 2> can = {
         stmbed::CAN(&hfdcan1),
         stmbed::CAN(&hfdcan2),
     };
+
+    UINT status;
+    ULONG actual_status;
+
+    /* PHY リンクアップを待つ */
+    status =
+        nx_ip_interface_status_check(&NetXDuoEthIpInstance, 0, NX_IP_LINK_ENABLED, &actual_status, TX_WAIT_FOREVER);
+    if (status != NX_SUCCESS) {
+        printf("LINK ENABLE wait failed (0x%X)\n", status);
+        Error_Handler();
+    }
+    /* IP アドレス解決（静的 IP なら ARP 解決完了）を待つ */
+    status =
+        nx_ip_interface_status_check(&NetXDuoEthIpInstance, 0, NX_IP_ADDRESS_RESOLVED, &actual_status, TX_WAIT_FOREVER);
+    if (status != NX_SUCCESS) {
+        printf("IP ADDRESS RESOLVED wait failed (0x%X)\n", status);
+        Error_Handler();
+    }
 
     ULONG IpAddress;
     ULONG NetMask;
@@ -47,39 +65,15 @@ extern "C" VOID cangateway_main(ULONG thread_input) {
         PRINT_IP_ADDRESS(IpAddress);
     }
 
-    // for (size_t i = 0; i < 5; i++)
-    //     tx_thread_sleep(20000);
-
     std::unique_ptr<thread> link_thread = std::make_unique<static_thread<1024>>("Link Thread", App_Link_Thread_Entry);
-
-    //     for (size_t i = 0; i < 5; i++)
-    //         tx_thread_sleep(1000);
-
-    // std::array channels = {
-    //     CannelloniChannel(&NetXDuoEthIpInstance, 6000, can[0], 1),
-    //     CannelloniChannel(&NetXDuoEthIpInstance, 6001, can[1], 2),
-    // };
-
-    // channels[0].start();
-    // channels[1].start();
-    //    printf("tp1\n");
-    //    std::array channels = {
-    //        // SocketcandClientChannel(&NetXDuoEthIpInstance, "192.168.1.10", 29536, "vcan0", can[0], 1),
-    //        //        CannelloniChannel(&NetXDuoEthIpInstance, 29536, can[0], 1),
-    //        // CannelloniChannel(&NetXDuoEthIpInstance, 6001, can[1], 2),
-    //    	GatewayChannel(&NetXDuoEthIpInstance, 6000, "vcan0", can[0])
-    //     };
-    //
-    //    channels.push_back(GatewayChannel(&NetXDuoEthIpInstance, 6000, "vcan0", can[0]));
 
     const uint32_t server_ip_address = IP_ADDRESS(192, 168, 1, 10);
     const uint16_t server_port = 29536;
 
     auto channel0 =
         std::make_shared<GatewayChannel>(&NetXDuoEthIpInstance, server_ip_address, server_port, 6000, "vcan0", can[0]);
-    auto channel1 = std::make_shared<GatewayChannel>(&NetXDuoEthIpInstance, server_ip_address, server_port, 6001, "vcan1", can[1]);
-
-    this_thread::sleep_for(5000);
+    auto channel1 =
+        std::make_shared<GatewayChannel>(&NetXDuoEthIpInstance, server_ip_address, server_port, 6001, "vcan1", can[1]);
 
     channel0->start();
     channel1->start();
@@ -96,8 +90,9 @@ VOID App_Link_Thread_Entry(ULONG thread_input) {
     // printf("App_Link_Thread_Entry\n");
 
     while (1) {
+
         /* Send request to check if the Ethernet cable is connected. */
-        status = nx_ip_interface_status_check(&NetXDuoEthIpInstance, 0, NX_IP_LINK_ENABLED, &actual_status, 10);
+        status = nx_ip_interface_status_check(&NetXDuoEthIpInstance, 0, NX_IP_LINK_ENABLED, &actual_status, 100);
 
         if (status == NX_SUCCESS) {
             if (linkdown == 1) {
@@ -111,7 +106,7 @@ VOID App_Link_Thread_Entry(ULONG thread_input) {
 
                 /* Send request to check if an address is resolved. */
                 status =
-                    nx_ip_interface_status_check(&NetXDuoEthIpInstance, 0, NX_IP_ADDRESS_RESOLVED, &actual_status, 10);
+                    nx_ip_interface_status_check(&NetXDuoEthIpInstance, 0, NX_IP_ADDRESS_RESOLVED, &actual_status, 100);
                 if (status == NX_SUCCESS) {
                     /* The network cable is connected again. */
                     printf("The network cable is connected again.\n");

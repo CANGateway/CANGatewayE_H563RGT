@@ -79,11 +79,14 @@ public:
     }
 
     // for clients
-    bool connect(uint32_t ip_address, uint16_t port) {
+    bool connect(uint32_t ip_address, uint16_t port, UINT *result = nullptr) {
         UINT ret;
         ret = nx_tcp_client_socket_connect(&socket_, ip_address, port, TX_WAIT_FOREVER);
         if (ret != NX_SUCCESS) {
-            // ERROR_TS("connect: %x\n", ret);
+            if (result != nullptr) {
+                *result = ret;
+            }
+            // ERROR_TS("connect error: %x\n", ret);
             // Error_Handler();
             return false;
         }
@@ -93,7 +96,7 @@ public:
     void disconnect() {
         UINT ret;
         ret = nx_tcp_socket_disconnect(&socket_, NX_NO_WAIT);
-        ret = nx_tcp_server_socket_unaccept(&socket_);
+        ret = nx_tcp_client_socket_unbind(&socket_);
         if (ret != NX_SUCCESS) {
             Error_Handler();
         }

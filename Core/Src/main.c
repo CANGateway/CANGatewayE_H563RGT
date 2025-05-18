@@ -103,6 +103,7 @@ int main(void)
   MX_SPI2_Init();
   /* USER CODE BEGIN 2 */
   setbuf(stdout, NULL);
+  HAL_Delay(5000);
   /* USER CODE END 2 */
 
   MX_ThreadX_Init();

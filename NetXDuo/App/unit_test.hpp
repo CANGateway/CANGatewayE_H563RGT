@@ -11,6 +11,21 @@ extern FDCAN_HandleTypeDef hfdcan2;
 
 namespace unit_test {
 
+void led_test() {
+    printf("LED Test\n");
+    using namespace stmbed;
+
+    DigitalOut led1(PC7);
+    DigitalOut led2(PC8);
+
+
+    while (1) {
+    	led1 = !led1;
+    	led2 = !led1;
+        threadx::this_thread::sleep_for(500);
+    }
+}
+
 void can_test() {
     printf("CAN Test\n");
 

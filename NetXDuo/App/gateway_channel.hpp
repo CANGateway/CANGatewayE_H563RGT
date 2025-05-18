@@ -36,7 +36,7 @@ public:
 
     GatewayChannel(NX_IP *interface, uint32_t server_ip_address, const uint16_t server_port, uint16_t port,
                    std::string can_interface_name, stmbed::CAN &hcan)
-        : interface_(interface), server_ip_address_(server_ip_address), server_port_(server_port), port_(port),
+        : interface_(interface), server_ip_address_(server_ip_address), server_port_(server_port), /*port_(port),*/
           can_interface_name_(can_interface_name), can_(hcan) {}
 
     ~GatewayChannel() = default;
@@ -67,16 +67,21 @@ private:
         tcp_socket_ = std::make_unique<TCPSocketType>(interface_);
 
         printf("bind\n");
-        tcp_socket_->bind(port_);
+        nx_tcp_client_socket_unbind(&tcp_socket_->get_native_handle());
+        tcp_socket_->bind(0);
 
         while (1) {
             // printf("wait connect\n");
             if (tcp_socket_->connect(server_ip_address_, server_port_)) {
                 // 接続に成功したらスレッドの作成
+                printf("tcp connection!\n");
                 receive_thread_ = std::make_unique<static_thread<THREAD_STACK_SIZE>>(
                     "Receive Thread", std::bind(&GatewayChannel::receive_thread_entry, this, std::placeholders::_1));
                 send_thread_ = std::make_unique<static_thread<THREAD_STACK_SIZE>>(
                     "Send Thread", std::bind(&GatewayChannel::send_thread_entry, this, std::placeholders::_1));
+            } else {
+                this_thread::sleep_for(500);
+                continue;
             }
 
             // printf("wait for disconnect\n");
@@ -100,7 +105,7 @@ private:
 
                     printf("stm32 listen: %s\n", cmd.c_str());
 
-                    if (cmd.starts_with("< hi >")) {
+                    if (cmd.starts_with("< hi >") && state_ != GatewayState::CONNECTING) {
                         state_ = GatewayState::CONNECTING;
                         add_tx_queue("< open " + can_interface_name_ + " >");
                     } else if (cmd == "< error could not open bus >") {
@@ -222,7 +227,7 @@ private:
         tcp_socket_->disconnect();
         //        tcp_socket_.reset();
         //        tcp_socket_ = std::make_unique<TCPSocketType>(interface_);
-        tcp_socket_->bind(port_);
+        tcp_socket_->bind(0);
         // printf("cleanup_and_relisten - end\n");
     }
 
@@ -438,24 +443,35 @@ private:
         }
         // printf("%s\n", id_str.c_str());
 
-        if(msg.size > 0) {
-			std::string data_str;
-			// printf("msg.size: %d\n", msg.size);
-			for (size_t i = 0; i < msg.size; i++) {
-				data_str = format("%s%02X ", data_str.c_str(), msg.data[i]);
-			}
-			// printf("%s\n", data_str.c_str());
-			str = format("< send %s %d %s>", id_str.c_str(), msg.size, data_str.c_str());
-        } else {
-        	str = format("< send %s 0 >", id_str.c_str());
+        // if (msg.size > 0) {
+        //     std::string data_str;
+        //     // printf("msg.size: %d\n", msg.size);
+        //     for (size_t i = 0; i < msg.size; i++) {
+        //         data_str = format("%s%02X ", data_str.c_str(), msg.data[i]);
+        //     }
+        //     // printf("%s\n", data_str.c_str());
+        //     str = format("< send %s %d %s>", id_str.c_str(), msg.size, data_str.c_str());
+        // } else {
+        //     str = format("< send %s 0 >", id_str.c_str());
+        // }
+
+        std::string time_str;
+        time_str = format("%.3f", 0.0);
+        // printf("%s\n", time_str.c_str());
+
+        std::string data_str;
+        // printf("msg.size: %d\n", msg.size);
+        for (size_t i = 0; i < msg.size; i++) {
+            data_str = format("%s%02X", data_str.c_str(), msg.data[i]);
         }
+        // printf("%s\n", data_str.c_str());
 
-
+        str = format("< frame %s %s %s >", id_str.c_str(), time_str.c_str(), data_str.c_str());
         return str;
     }
 
     NX_IP *interface_;
-    uint16_t port_;
+    // uint16_t port_;
     std::string can_interface_name_;
     stmbed::CAN can_;
 
