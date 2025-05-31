@@ -75,7 +75,7 @@ private:
             // printf("wait connect\n");
             if (tcp_socket_->connect(server_ip_address_, server_port_)) {
                 // 接続に成功したらスレッドの作成
-                printf("tcp connection!\n");
+                // printf("tcp connection!\n");
                 receive_thread_ = std::make_unique<static_thread<THREAD_STACK_SIZE>>(
                     "Receive Thread", std::bind(&GatewayChannel::receive_thread_entry, this, std::placeholders::_1));
                 send_thread_ = std::make_unique<static_thread<THREAD_STACK_SIZE>>(
@@ -123,28 +123,6 @@ private:
                     } else if (cmd == "< echo >") {
                         add_tx_queue("< echo >");
                     } else if (state_ == GatewayState::CONNECTED) {
-                        // if (cmd.starts_with("< send ")) {
-                        //     // e.g. "< send 1FFFFFFF 5 a 0 0 1 cf >"
-                        //     //       < send [id] [dlc] [data] >
-
-                        //     // printf("to_can_message\n");
-
-                        //     stmbed::CANMessage msg = to_can_message(cmd);
-
-                        //     // printf("msg.format: %d\n", msg.format);
-                        //     // printf("msg.id: %d\n", msg.id);
-                        //     // printf("msg.size: %d\n", msg.size);
-                        //     // for(size_t i = 0; i < msg.size; i++) {
-                        //     //     printf("msg.data[%d]: %d\n", i, msg.data[i]);
-                        //     // }
-
-                        //     // printf("can->tx_fifo_size(): %d\n", can_->tx_fifo_size());
-
-                        //     // printf("can write\n");
-                        //     can_.write(msg);
-
-                        //     // printf("can->write\n");
-                        // } else
                         if (cmd.starts_with("< frame ")) {
                             // e.g. "< frame 1FFFFFFF 5 a 0 0 1 cf >"
                             //       < frame [id] [dlc] [data] >
@@ -155,7 +133,9 @@ private:
                             // for (size_t i = 0; i < msg.size; i++) {
                             // printf("msg.data[%d]: %d\n", i, msg.data[i]);
                             // }
-                            can_.write(msg);
+                            if (can_.writeable()) {
+                                can_.write(msg, false);
+                            }
                         } else if (cmd == "< close >") {
                             state_ = GatewayState::DISCONNECTED;
                             add_tx_queue("< close >");
@@ -168,7 +148,7 @@ private:
                     }
                 }
 
-                this_thread::sleep_for(10); // 少し待機
+                this_thread::sleep_for(1); // 少し待機
             }
 
             // cleanup_and_relisten
@@ -194,7 +174,7 @@ private:
             }
             recv_str_cmd_mute_.unlock();
 
-            this_thread::sleep_for(10);
+            this_thread::sleep_for(1);
         }
     }
 
@@ -213,7 +193,7 @@ private:
                 // printf("send: %s, %s\n", can_interface_name_.c_str(), str.c_str());
                 tcp_socket_->send_str(str);
             } else {
-                this_thread::sleep_for(10);
+                this_thread::sleep_for(1);
             }
         }
     }
@@ -253,100 +233,6 @@ private:
 
         return cmd_list;
     }
-
-    // stmbed::CANMessage to_can_message(const std::string &packet) {
-    //     stmbed::CANMessage msg;
-
-    //     // e.g. "< send 1FFFFFFF 5 a 0 0 1 cf >"
-    //     //       < send [id] [dlc] [data] >
-
-    //     bool is_extended;
-    //     uint32_t id;
-    //     std::vector<uint8_t> data;
-
-    //     size_t pos = 0;
-    //     size_t len = packet.size();
-
-    //     // Find the start of the packet
-    //     while (pos < len && packet[pos] != '<')
-    //         ++pos;
-    //     if (pos == len)
-    //         return stmbed::CANMessage();
-    //     ++pos;
-
-    //     // Skip whitespace and "send"
-    //     while (pos < len && std::isspace(packet[pos]))
-    //         ++pos;
-    //     if (pos == len || packet.substr(pos, 4) != "send")
-    //         return stmbed::CANMessage();
-    //     pos += 4;
-
-    //     // Skip whitespace
-    //     while (pos < len && std::isspace(packet[pos]))
-    //         ++pos;
-
-    //     // Read ID
-    //     size_t id_start = pos;
-    //     while (pos < len && std::isalnum(packet[pos]))
-    //         ++pos;
-    //     if (pos == id_start)
-    //         return stmbed::CANMessage();
-
-    //     std::string id_str = packet.substr(id_start, pos - id_start);
-    //     if (id_str.size() == 3) {
-    //         is_extended = false;
-    //         id = std::strtoul(id_str.c_str(), nullptr, 16);
-    //     } else if (id_str.size() == 8) {
-    //         is_extended = true;
-    //         id = std::strtoul(id_str.c_str(), nullptr, 16);
-    //     } else {
-    //         return stmbed::CANMessage();
-    //     }
-
-    //     // Skip whitespace
-    //     while (pos < len && std::isspace(packet[pos]))
-    //         ++pos;
-
-    //     // Read DLC
-    //     size_t dlc_start = pos;
-    //     while (pos < len && std::isdigit(packet[pos]))
-    //         ++pos;
-    //     if (pos == dlc_start)
-    //         return stmbed::CANMessage();
-
-    //     int dlc = std::strtoul(packet.substr(dlc_start, pos - dlc_start).c_str(), nullptr, 10);
-
-    //     // Skip whitespace
-    //     while (pos < len && std::isspace(packet[pos]))
-    //         ++pos;
-
-    //     // Read Data
-    //     data.clear();
-    //     for (int i = 0; i < dlc; ++i) {
-    //         size_t data_start = pos;
-    //         while (pos < len && std::isalnum(packet[pos]))
-    //             ++pos;
-    //         if (pos == data_start)
-    //             return stmbed::CANMessage();
-
-    //         std::string byte_str = packet.substr(data_start, pos - data_start);
-    //         uint8_t byte = std::strtoul(byte_str.c_str(), nullptr, 16);
-    //         data.push_back(byte);
-
-    //         // Skip whitespace
-    //         while (pos < len && std::isspace(packet[pos]))
-    //             ++pos;
-    //     }
-
-    //     msg.format = is_extended ? stmbed::CANExtended : stmbed::CANStandard;
-    //     msg.id = id;
-    //     msg.size = dlc;
-    //     for (size_t i = 0; i < dlc; i++) {
-    //         msg.data[i] = data[i];
-    //     }
-
-    //     return msg;
-    // }
 
     stmbed::CANMessage to_can_frame(const std::string &packet) {
         stmbed::CANMessage msg{};
@@ -456,18 +342,6 @@ private:
             str = format("< send %s 0 >", id_str.c_str());
         }
 
-        // std::string time_str;
-        // time_str = format("%.3f", 0.0);
-        // // printf("%s\n", time_str.c_str());
-
-        // std::string data_str;
-        // // printf("msg.size: %d\n", msg.size);
-        // for (size_t i = 0; i < msg.size; i++) {
-        //     data_str = format("%s%02X", data_str.c_str(), msg.data[i]);
-        // }
-        // // printf("%s\n", data_str.c_str());
-
-        // str = format("< frame %s %s %s >", id_str.c_str(), time_str.c_str(), data_str.c_str());
         return str;
     }
 
