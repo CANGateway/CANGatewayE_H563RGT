@@ -56,7 +56,8 @@ private:
             if (state_ != GatewayState::CONNECTED) {
                 return;
             }
-            printf("can recv: id: %d, size: %d\n", msg.id, msg.size);
+            // printf("can recv: id: %x, size: %d, is_extended: %d\n", msg.id, msg.size,
+            //        msg.format == stmbed::CANFormat::CANExtended);
             std::string str = to_socketcan_frame_str(msg);
             // printf("to_socketcan_frame_str: \"%s\"\n", str.c_str());
             // add_tx_queue(str);
@@ -103,7 +104,7 @@ private:
                     recv_str_cmd_queue_.pop();
                     recv_str_cmd_mute_.unlock();
 
-                    printf("stm32 listen: %s\n", cmd.c_str());
+                    // printf("stm32 listen: %s\n", cmd.c_str());
 
                     if (cmd.starts_with("< hi >") && state_ != GatewayState::CONNECTING) {
                         state_ = GatewayState::CONNECTING;
@@ -148,12 +149,12 @@ private:
                             // e.g. "< frame 1FFFFFFF 5 a 0 0 1 cf >"
                             //       < frame [id] [dlc] [data] >
                             stmbed::CANMessage msg = to_can_frame(cmd);
-                            printf("msg.format: %d\n", msg.format);
-                            printf("msg.id: %d\n", msg.id);
-                            printf("msg.size: %d\n", msg.size);
-                            for (size_t i = 0; i < msg.size; i++) {
-                                printf("msg.data[%d]: %d\n", i, msg.data[i]);
-                            }
+                            // printf("msg.format: %d\n", msg.format);
+                            // printf("msg.id: %d\n", msg.id);
+                            // printf("msg.size: %d\n", msg.size);
+                            // for (size_t i = 0; i < msg.size; i++) {
+                            // printf("msg.data[%d]: %d\n", i, msg.data[i]);
+                            // }
                             can_.write(msg);
                         } else if (cmd == "< close >") {
                             state_ = GatewayState::DISCONNECTED;
@@ -209,7 +210,7 @@ private:
                 send_str_cmd_queue_.pop();
                 send_str_cmd_mute_.unlock();
 
-                printf("send: %s\n", str.c_str());
+                // printf("send: %s, %s\n", can_interface_name_.c_str(), str.c_str());
                 tcp_socket_->send_str(str);
             } else {
                 this_thread::sleep_for(10);
@@ -443,30 +444,30 @@ private:
         }
         // printf("%s\n", id_str.c_str());
 
-        // if (msg.size > 0) {
-        //     std::string data_str;
-        //     // printf("msg.size: %d\n", msg.size);
-        //     for (size_t i = 0; i < msg.size; i++) {
-        //         data_str = format("%s%02X ", data_str.c_str(), msg.data[i]);
-        //     }
-        //     // printf("%s\n", data_str.c_str());
-        //     str = format("< send %s %d %s>", id_str.c_str(), msg.size, data_str.c_str());
-        // } else {
-        //     str = format("< send %s 0 >", id_str.c_str());
-        // }
-
-        std::string time_str;
-        time_str = format("%.3f", 0.0);
-        // printf("%s\n", time_str.c_str());
-
-        std::string data_str;
-        // printf("msg.size: %d\n", msg.size);
-        for (size_t i = 0; i < msg.size; i++) {
-            data_str = format("%s%02X", data_str.c_str(), msg.data[i]);
+        if (msg.size > 0) {
+            std::string data_str;
+            // printf("msg.size: %d\n", msg.size);
+            for (size_t i = 0; i < msg.size; i++) {
+                data_str = format("%s%02X ", data_str.c_str(), msg.data[i]);
+            }
+            // printf("%s\n", data_str.c_str());
+            str = format("< send %s %d %s>", id_str.c_str(), msg.size, data_str.c_str());
+        } else {
+            str = format("< send %s 0 >", id_str.c_str());
         }
-        // printf("%s\n", data_str.c_str());
 
-        str = format("< frame %s %s %s >", id_str.c_str(), time_str.c_str(), data_str.c_str());
+        // std::string time_str;
+        // time_str = format("%.3f", 0.0);
+        // // printf("%s\n", time_str.c_str());
+
+        // std::string data_str;
+        // // printf("msg.size: %d\n", msg.size);
+        // for (size_t i = 0; i < msg.size; i++) {
+        //     data_str = format("%s%02X", data_str.c_str(), msg.data[i]);
+        // }
+        // // printf("%s\n", data_str.c_str());
+
+        // str = format("< frame %s %s %s >", id_str.c_str(), time_str.c_str(), data_str.c_str());
         return str;
     }
 
