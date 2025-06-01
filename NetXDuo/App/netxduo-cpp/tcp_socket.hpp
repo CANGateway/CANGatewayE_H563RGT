@@ -132,13 +132,21 @@ public:
 
         ret = nx_packet_allocate(&NxAppPool, &data_packet, NX_TCP_PACKET, TX_WAIT_FOREVER);
         if (ret != NX_SUCCESS) {
+            printf("nx_packet_allocate error: %x\n", ret);
             return;
         }
 
-        nx_packet_data_append(data_packet, data, len, &NxAppPool, TX_WAIT_FOREVER);
+        ret = nx_packet_data_append(data_packet, data, len, &NxAppPool, TX_WAIT_FOREVER);
+        if (ret != NX_SUCCESS) {
+            nx_packet_release(data_packet);
+            printf("nx_packet_data_append error: %x\n", ret);
+            return;
+        }
+
         ret = nx_tcp_socket_send(&socket_, data_packet, TX_WAIT_FOREVER);
         if (ret != NX_SUCCESS) {
             nx_packet_release(data_packet);
+            printf("nx_tcp_socket_send error: %x\n", ret);
             return;
         }
     }

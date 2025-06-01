@@ -56,12 +56,12 @@ private:
             if (state_ != GatewayState::CONNECTED) {
                 return;
             }
-            // printf("can recv: id: %x, size: %d, is_extended: %d\n", msg.id, msg.size,
-            //        msg.format == stmbed::CANFormat::CANExtended);
-            std::string str = to_socketcan_frame_str(msg);
-            // printf("to_socketcan_frame_str: \"%s\"\n", str.c_str());
-            // add_tx_queue(str);
-            send_str_cmd_queue_.push(std::move(str)); // ISRから呼び出すため直接push
+            // recv_can_msg_queue_.push(msg);
+
+            static constexpr size_t MAX_RECV_CAN_QUEUE = 32;
+            if (recv_can_msg_queue_.size() < MAX_RECV_CAN_QUEUE) {
+                recv_can_msg_queue_.push(msg);
+            }
         });
 
         // create socket
@@ -80,6 +80,9 @@ private:
                     "Receive Thread", std::bind(&GatewayChannel::receive_thread_entry, this, std::placeholders::_1));
                 send_thread_ = std::make_unique<static_thread<THREAD_STACK_SIZE>>(
                     "Send Thread", std::bind(&GatewayChannel::send_thread_entry, this, std::placeholders::_1));
+                recv_msg_convert_thread_ = std::make_unique<static_thread<THREAD_STACK_SIZE>>(
+                    "Recv Msg Convert Thread",
+                    std::bind(&GatewayChannel::recv_msg_convert_thread_entry, this, std::placeholders::_1));
             } else {
                 this_thread::sleep_for(500);
                 continue;
@@ -135,6 +138,8 @@ private:
                             // }
                             if (can_.writeable()) {
                                 can_.write(msg, false);
+                            } else {
+                                printf("CAN bus is not writable, dropping message: %s\n", cmd.c_str());
                             }
                         } else if (cmd == "< close >") {
                             state_ = GatewayState::DISCONNECTED;
@@ -192,9 +197,29 @@ private:
 
                 // printf("send: %s, %s\n", can_interface_name_.c_str(), str.c_str());
                 tcp_socket_->send_str(str);
-            } else {
-                this_thread::sleep_for(1);
             }
+            this_thread::sleep_for(1);
+        }
+    }
+
+    void recv_msg_convert_thread_entry(ULONG thread_input) {
+        using namespace threadx;
+        std::string str;
+
+        printf("recv msg convert thread\n");
+        while (1) {
+            if (!recv_can_msg_queue_.empty()) {
+                stmbed::CANMessage msg = recv_can_msg_queue_.front();
+                recv_can_msg_queue_.pop();
+
+                // printf("recv: id: %x, size: %d, is_extended: %d\n", msg.id, msg.size,
+                //        msg.format == stmbed::CANFormat::CANExtended);
+                str = to_socketcan_frame_str(msg);
+                // printf("to_socketcan_frame_str: \"%s\"\n", str.c_str());
+                add_tx_queue(str);
+            }
+
+            this_thread::sleep_for(1);
         }
     }
 
@@ -357,9 +382,12 @@ private:
 
     constexpr static UINT THREAD_STACK_SIZE = 1024 * 2;
     std::unique_ptr<threadx::thread> main_thread_;
+    std::unique_ptr<threadx::thread> recv_msg_convert_thread_;
     std::unique_ptr<threadx::thread> receive_thread_;
     std::unique_ptr<threadx::thread> send_thread_;
     std::unique_ptr<TCPSocketType> tcp_socket_;
+
+    std::queue<stmbed::CANMessage> recv_can_msg_queue_;
 
     std::queue<std::string> recv_str_cmd_queue_;
     threadx::mutex recv_str_cmd_mute_;

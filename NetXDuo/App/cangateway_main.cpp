@@ -65,7 +65,8 @@ extern "C" VOID cangateway_main(ULONG thread_input) {
         PRINT_IP_ADDRESS(IpAddress);
     }
 
-    std::unique_ptr<thread> link_thread = std::make_unique<static_thread<1024>>("Link Thread", App_Link_Thread_Entry);
+    // std::unique_ptr<thread> link_thread = std::make_unique<static_thread<1024>>("Link Thread",
+    // App_Link_Thread_Entry);
 
     const uint32_t server_ip_address = IP_ADDRESS(192, 168, 40, 225);
     // const uint32_t server_ip_address = IP_ADDRESS(0, 0, 0, 0);
